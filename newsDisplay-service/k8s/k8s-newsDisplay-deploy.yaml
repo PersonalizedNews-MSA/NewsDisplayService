@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-newsDisplay-deployment
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1  # 원하는 파드 복제본 수 (기본값: 1)
+  selector:
+    matchLabels:
+      app: k8s-newsDisplay  # 템플릿의 labels와 일치해야 함
+  template:
+    metadata:
+      labels:
+        app: k8s-newsDisplay  # selector와 일치해야 함
+    spec:
+      containers:
+        - name: k8s-newsDisplay
+          image: firendermen/k8s-newsDisplay:0.0.1
+          imagePullPolicy: Always
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: dev
+          ports:
+            - containerPort: 8080
+
+          livenessProbe:
+            httpGet:
+              path: /backend/post/v1/k8s/liveness  # TODO 스프링 부트 생존 상태 엔드포인트
+              port: 8080
+            initialDelaySeconds: 30   # 컨테이너 시작 후 첫 검사까지 대기
+            periodSeconds: 5          # 5초마다 체크
+            failureThreshold: 3       # 3회 연속 실패 시 컨테이너 재시작
+            timeoutSeconds: 3         # 3초 내 응답 필요
+
+          # Readiness Probe 추가 (트래픽 유입 제어용)
+          readinessProbe:
+            httpGet:
+              path: /backend/post/v1/k8s/readiness  # TODO 스프링 부트 준비 상태 엔드포인트
+              port: 8080
+            initialDelaySeconds: 30   # 컨테이너 시작 후 첫 검사까지 대기
+            periodSeconds: 5          # 5초마다 체크
+            failureThreshold: 3       # 3회 연속 실패 시 서비스 트래픽 중지
+            timeoutSeconds: 3         # 3초 내 응답 필요
+
+          volumeMounts:
+            - mountPath: /etc/config
+              name: newsDisplay-config-volume
+              readOnly: true
+            - mountPath: /etc/secret
+              name: newsDisplay-secret-volume
+              readOnly: true
+      volumes:
+        - name: newsDisplay-config-volume
+          configMap:
+            name: newsDisplay-config
+            items:
+              - key: application-dev.yml
+                path: application-dev.yml
+        - name: newsDisplay-secret-volume
+          secret:
+            secretName: newsDisplay-secret
+            items:
+              - key: application-secret.yml
+                path: application-secret.yml

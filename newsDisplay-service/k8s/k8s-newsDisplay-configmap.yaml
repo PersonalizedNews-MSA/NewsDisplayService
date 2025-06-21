@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: newsDisplay-config
+data:
+  application-dev.yml: |
+    server:
+      port: 8080
+    # url 이랑 드라이버클래스네임은 정확한지 확인해야함 - 0621
+    spring:
+      datasource:
+        url: jdbc:mariadb://k8s-external-newsDisplay-maria-service:3306/news?serverTimezone=UTC&useSSL=true&autoReconnect=true&useUnicode=true&characterEncoding=utf-8
+        
+        driver-class-name: com.mariadb.cj.jdbc.Driver
+        hikari:
+          connection-test-query: SELECT 1 # HikariCP 유효성 검사 추가
+    jpa:
+      hibernate:
+        ddl-auto: create # 오직 테스트 환경에서만
+        generate-ddl: true # 오직 테스트 환경에서만
+        show-sql: true
+      open-in-view: false
+    kafka:
+      bootstrap-servers: localhost:9092
+
+
