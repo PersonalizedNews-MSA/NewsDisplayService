@@ -1,19 +1,34 @@
 package com.mini2.newsdisplayservice.event.consumer.message.favorite;
 
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteInfoDto;
-import lombok.Getter;
-import lombok.Setter;
-
-import java.time.LocalDateTime;
-import java.util.List;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.*;
 
 @Getter
 @Setter
 public class FavoriteInfoEvent {
     public static final String Topic = "UserFavoriteInfo";
+
     private String eventId;
-    private LocalDateTime timestamp;
+    private String timestamp; // LocaldateTime 형태
+
     private String sourceService;
 
-    private List<FavoriteInfoDto> payload;
+    private Payload payload;
+
+    @Data // Payload 내부 클래스에도 Lombok 어노테이션 적용
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Payload {
+        @JsonProperty("userId")
+        private String userId;
+
+        @JsonProperty("newsId")
+        private String newsId;
+
+        @JsonProperty("news_category")
+        private String newsCategory;
+
+        @JsonProperty("created_time")
+        private String createdTime;
+    }
 }
