@@ -76,8 +76,12 @@ pipeline {
                             script: "gradle -q getAppVersion",
                             returnStdout: true
                     ).trim()
+                    
+                    // !!! 핵심 수정: APP_NAME을 소문자로 변환합니다. !!!
+                    def lowerCaseAppName = APP_NAME.toLowerCase()
 
-                    DOCKER_IMAGE_NAME = "${DOCKER_REGISTRY}/${APP_NAME}:${APP_VERSION}"
+                    // Docker 이미지 이름 정의 (소문자로 변환된 이름을 사용)
+                    DOCKER_IMAGE_NAME = "${DOCKER_REGISTRY}/${lowerCaseAppName}:${APP_VERSION}"
 
                     sh "echo IMAGE_NAME is ${APP_NAME}"
                     sh "echo IMAGE_VERSION is ${APP_VERSION}"
