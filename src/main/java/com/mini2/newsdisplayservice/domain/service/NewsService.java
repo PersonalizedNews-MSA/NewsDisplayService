@@ -7,6 +7,7 @@ import com.mini2.newsdisplayservice.common.exception.kind.NotFound;
 import com.mini2.newsdisplayservice.domain.dto.NewsResponse;
 import com.mini2.newsdisplayservice.domain.dto.NewsResultResponse;
 import com.mini2.newsdisplayservice.domain.dto.NewsSummaryResponse;
+import com.mini2.newsdisplayservice.domain.dto.favorite.LikeEvent;
 import com.mini2.newsdisplayservice.domain.entity.News;
 import com.mini2.newsdisplayservice.domain.repository.NewsRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,12 +28,11 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
 import java.nio.charset.Charset;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.stream.Collectors;
 
 // gateway에서 토큰 인증하고 헤더로 보냄
@@ -43,32 +43,36 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class NewsService {
+    private final static int TOTAL_ITEM_SIZE = 10;
+    // 가중치 함수 조절을 위한 상수 (값이 클수록 시간이 지남에 따라 점수 감소가 가파름)
+    private static final double DECAY_RATE = 0.00000000001;
+    // 각 좋아요 이벤트가 기여할 수 있는 최대 점수
+    private static final double MAX_SCORE_PER_LIKE_EVENT = 10.0;
+    // 각 카테고리의 최종 합산 점수 최대치
+    private static final double MAX_CATEGORY_TOTAL_SCORE = 50.0;
+    private final NewsRepository newsRepository;
+    private final OpenAiChatModel openAiChatModel;
+//    private final FavoriteRepository favoriteRepository;
+//    private final UserInterestRepository userInterestRepository;
+    private final ObjectMapper objectMapper;
     @Value("${naver.client.id}")
     private String CLIENT_ID;
     @Value("${naver.search.key}")
     private String CLIENT_SECRET;
 
-    private final static int TOTAL_ITEM_SIZE = 10;
-
-    private final NewsRepository newsRepository;
-    private final OpenAiChatModel openAiChatModel;
-    private final ObjectMapper objectMapper;
-//    private final FavoriteRepository favoriteRepository;
-//    private final UserInterestRepository userInterestRepository;
-
     public List<NewsResponse> getNews(Long userId) {
         List<News> newsList = newsRepository.findAll();
-        List<String> favorites = getUserFavorite(userId);
+//        List<String> favorites = getUserFavorite(userId);
         if (newsList.isEmpty()) throw new NotFound("서버 내부 오류");
 
         return newsList.stream()
                 .map(news -> {
-                    boolean isFavorite = favorites != null && favorites.contains(news.getLink());
+                    boolean isFavorite = false;//favorites != null && favorites.contains(news.getLink());
                     return NewsResponse.builder()
                             .title(news.getTitle())
-                            .link(news.getLink())
-                            .thumbnail(news.getThumbnail())
-                            .description(news.getDescription())
+//                            .link(news.getLink())
+//                            .thumbnail(news.getThumbnail())
+//                            .description(news.getDescription())
                             .category(news.getCategory())
                             .favorite(isFavorite)
                             .build();
@@ -76,32 +80,96 @@ public class NewsService {
                 .toList();
     }
 
+    public Map<String, Double> calculateCategoryScores(List<LikeEvent> likeEvents) {
+        Map<String, Double> categoryScores = new HashMap<>();
+        LocalDateTime now = LocalDateTime.now(); // 현재 시간
+
+        for (LikeEvent event : likeEvents) {
+            String category = event.getCategory();
+            LocalDateTime likedAt = event.getCreatedAt();
+
+            // 좋아요를 누른 시점과 현재 시점의 차이 계산 (밀리초 단위)
+            long durationMillis = Duration.between(likedAt, now).toMillis();
+
+            // 시간 가중치 계산 (지수 감소 함수: e^(-k * 경과 시간))
+            double timeWeight = Math.exp(-DECAY_RATE * durationMillis);
+
+            // 각 좋아요 이벤트의 기본 점수 (여기서는 1.0)에 시간 가중치를 곱함
+            double scoreToAdd = 1.0 * timeWeight;
+
+            // 1. 각 좋아요 이벤트가 기여할 수 있는 최대 점수 제한
+            // scoreToAdd가 MAX_SCORE_PER_LIKE_EVENT를 초과하지 않도록 함 (거의 발생하지 않겠지만 안전장치)
+            scoreToAdd = Math.min(scoreToAdd, MAX_SCORE_PER_LIKE_EVENT);
+
+            // 카테고리별 현재 점수를 가져오거나 0으로 초기화
+            double currentCategoryTotal = categoryScores.getOrDefault(category, 0.0);
+
+            // 새로운 점수를 더함
+            double newCategoryTotal = currentCategoryTotal + scoreToAdd;
+
+            // 2. 카테고리별 최종 합산 점수 최대치 제한
+            // MAX_CATEGORY_TOTAL_SCORE를 초과하지 않도록 함
+            newCategoryTotal = Math.min(newCategoryTotal, MAX_CATEGORY_TOTAL_SCORE);
+
+            categoryScores.put(category, newCategoryTotal);
+        }
+        return categoryScores;
+    }
+
     @Transactional
     public String getKeyword(Long userId) {
-        List<String> interests = userInterestRepository.findByUserId(userId).stream()
-                .map(UserInterest::getInterest)
-                .map(Interest::getName)
-                .collect(Collectors.toList());
-        List<String> favorites = favoriteRepository.findByUserId(userId).stream()
-                .map(Favorite::getNewsCategory)
-                .toList();
+        // TODO 바꿀 것
+        List<String> interests = Arrays.asList("게임", "스텔라 블레이드", "김형태");
+        List<String> favorites = Arrays.asList("IT/과학", "세계");
+
 //        List<News> newsList = newsRepository.findAll();
 
         String interestStr = String.join(", ", interests);
-
-        // TODO 최근에 좋아요 누른거 10개 중에서 가장 빈도높은 카테고리 보내기
-        /** TODO 각 카테고리에 대해:
-        //선호 점수 = 관심사 포함 여부 (2점) + 좋아요 뉴스 수 (1점/개수)
-        //
-        //예:
-        //정치: 관심사 포함(2점) + 좋아요 3건(3점) → 총 5점
-        //IT: 관심사 미포함(0점) + 좋아요 2건(2점) → 총 2점
-        **/
-        String favoriteStr = String.join(", ",favorites);
+        // "게임, 스텔라 블레이드, 김형태"
+        String favoriteStr = String.join(", ", favorites);
         String titles = "null";
 //                newsList.stream()
 //                .map(news -> news.getTitle() + " (" + news.getCategory() + ")")
 //                .collect(Collectors.joining("\n- ", "- ", ""));
+
+        // TODO 최근에 좋아요 누른거 10개 중에서 가장 빈도높은 카테고리 보내기
+        /** TODO 각 카테고리에 대해:
+         //선호 점수 = 관심사 포함 여부 (2점) + 좋아요 뉴스 수 (1점/개수)
+         //최종 점수 = (좋아요 점수 * 가중치1) + (관심사 매칭 점수 * 가중치2)
+         //예:
+         //정치: 관심사 포함(2점) + 좋아요 3건(3점) → 총 5점
+         //IT: 관심사 미포함(0점) + 좋아요 2건(2점) → 총 2점
+         **/
+        // 예시 데이터 (다양한 시간대의 좋아요 이벤트)
+        List<LikeEvent> likeEvents = List.of(
+                // IT/과학 카테고리: 매우 최근 3개 + 중간 1개 => 높은 점수 예상
+                new LikeEvent("IT/과학", LocalDateTime.now().minusMinutes(5)),   // 5분 전 (거의 10점 기여)
+                new LikeEvent("IT/과학", LocalDateTime.now().minusMinutes(10)),  // 10분 전 (거의 10점 기여)
+                new LikeEvent("IT/과학", LocalDateTime.now().minusMinutes(15)),  // 15분 전 (거의 10점 기여)
+                new LikeEvent("IT/과학", LocalDateTime.now().minusDays(10)),     // 10일 전 (점수 기여 낮아짐)
+                new LikeEvent("IT/과학", LocalDateTime.now().minusDays(20)),     // 20일 전 (점수 기여 더 낮아짐)
+                new LikeEvent("IT/과학", LocalDateTime.now().minusDays(30)),     // 30일 전 (점수 기여 더 낮아짐)
+
+                // 경제 카테고리: 비교적 최근 2개 => 중간 점수 예상
+                new LikeEvent("경제", LocalDateTime.now().minusDays(2)),        // 2일 전
+                new LikeEvent("경제", LocalDateTime.now().minusDays(5)),        // 5일 전
+
+                // 사회 카테고리: 1개만 있고 오래됨 => 낮은 점수 예상
+                new LikeEvent("사회", LocalDateTime.now().minusDays(60)),        // 60일 전
+
+                // 정치 카테고리: 매우 많고 아주 최근에 몰림 => 50점 상한 도달 예상
+                new LikeEvent("정치", LocalDateTime.now().minusHours(1)),
+                new LikeEvent("정치", LocalDateTime.now().minusHours(2)),
+                new LikeEvent("정치", LocalDateTime.now().minusHours(3)),
+                new LikeEvent("정치", LocalDateTime.now().minusHours(4))
+        );
+
+
+        Map<String, Double> finalScores = calculateCategoryScores(likeEvents);
+        System.out.println("--- 카테고리별 최종 점수 (시간 가중치 및 최대 점수 제한 적용) ---");
+        finalScores.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed()) // 점수가 높은 순으로 정렬
+                .forEach(entry -> System.out.printf("%s: %.2f점%n", entry.getKey(), entry.getValue()));
 
         return openAiChatModel.call(
                 """
@@ -112,64 +180,22 @@ public class NewsService {
                         오늘의 뉴스 헤드라인과 카테고리는 다음과 같습니다:
                         %s
                         
-                        위 정보를 바탕으로, 다음 조건에 따라 네이버 검색 API에 사용할 적절한 검색어를 7개 추천해주세요:
                         
-                        - 검색어는 중복되지 않도록 서로 다른 주제를 다뤄야 합니다.
+                        
+                        위 정보를 바탕으로, 다음 조건에 따라 네이버 검색 API에 사용할 적절한 검색어를 5개 추천해주세요:
+                        
+                        - 검색어는 가급적 넓은 범위의 관심사를 포괄하며, 구체적인 하위 주제도 포함하되 너무 좁거나 중복되지 않도록 해야 합니다.
                         - 각 검색어는 하나의 명사 또는 간결한 단어로 구성해주세요 (예: 'AI', '부동산', '일자리').
                         - 검색어는 사용자의 관심사와 오늘 뉴스 헤드라인에 언급된 키워드를 기반으로 도출해주세요.
                         - 사용자의 관심사와 관련된 키워드는 높은 우선순위를 갖습니다.
                         - 뉴스 헤드라인에서 의미 있는 키워드를 충분히 도출할 수 없을 경우, 사용자 관심사 기반으로 **최신 트렌드를 반영한 키워드**를 생성해주세요.
+                        - 
                         - 추천된 검색어는 공백으로 구분된 5개의 단어로만 출력해주세요 (쉼표 없이).
                         """.formatted(interestStr, favoriteStr, titles)
 
         );
     }
 
-    public List<NewsResponse> getSearchNews(String search, Long userId) {
-        log.info("search keyword : {}",search);
-        log.info("user id : {}",userId);
-        List<NewsResponse> dtos = new ArrayList<>();
-        String response = naverSearchApi(search, null, null);
-        List<String> favorites = getUserFavorite(userId);
-
-        try {
-            JsonNode root = objectMapper.readTree(response);
-            JsonNode items = root.path("items");
-            if (items.isArray()) {
-                for (JsonNode item : items) {
-                    String link = item.path("link").asText();
-                    if (    !link.contains("https://n.news.naver.com") &&
-                            !link.contains("https://news.naver.com") &&
-                            !link.contains("https://m.sports.naver.com") &&
-                            !link.contains("https://m.entertain.naver.com")) continue; //네이버 뉴스 기사만 가져옴
-
-                    String title = Jsoup.parse(item.path("title").asText()).text();
-                    String description = Jsoup.parse(item.path("description").asText()).text();
-                    List<String> newInfo = getNewsInfo(link);
-                    if(newInfo == null) continue;
-                    String pubDate = dateParser(Jsoup.parse(item.path("pubDate").asText()).text());
-                    boolean isFavorite = favorites != null && favorites.contains(link);
-                    dtos.add(NewsResponse.builder()
-                            .title(title)
-                            .link(link)
-                            .thumbnail(newInfo.get(0))
-                            .category(newInfo.get(1))
-                            .favorite(isFavorite)
-                            .description(description)
-                            .pubDate(pubDate)
-                            .build());
-                }
-            } else {
-                log.info("네이버 뉴스 응답 객체 비었음");
-            }
-        } catch (Exception e) {
-            log.error("[News Service] getSearchNews");
-            e.printStackTrace();
-            throw new NotFound("뉴스정보를 불러올 수 없습니다.");
-        }
-
-        return dtos;
-    }
 
     public NewsResultResponse getResponse(String keyword, Integer start, Long userId) {
         List<NewsResponse> dtos = new ArrayList<>();
@@ -177,7 +203,7 @@ public class NewsService {
         int perKeywordSize = TOTAL_ITEM_SIZE / keywords.length;
         List<String> favorites = getUserFavorite(userId);
         int max = 0;
-        start = start!=null?start %= 1000:start;
+        start = start != null ? start %= 1000 : start;
         outer:
         for (String k : keywords) {
             int collected = 0;
@@ -197,7 +223,7 @@ public class NewsService {
 
                     for (JsonNode item : items) {
                         String link = item.path("link").asText();
-                        if (    !link.contains("https://n.news.naver.com") &&
+                        if (!link.contains("https://n.news.naver.com") &&
                                 !link.contains("https://news.naver.com") &&
                                 !link.contains("https://m.sports.naver.com") &&
                                 !link.contains("https://m.entertain.naver.com")
@@ -211,7 +237,7 @@ public class NewsService {
                         String title = Jsoup.parse(item.path("title").asText()).text();
                         String description = Jsoup.parse(item.path("description").asText()).text();
                         List<String> newsInfo = getNewsInfo(link);
-                        if(newsInfo == null) continue;
+                        if (newsInfo == null) continue;
                         String pubDate = dateParser(Jsoup.parse(item.path("pubDate").asText()).text());
                         boolean isFavorite = favorites != null && favorites.contains(link);
                         dtos.add(NewsResponse.builder()
@@ -233,7 +259,7 @@ public class NewsService {
                     // 다음 페이지로 넘어갈 수 있도록 start 증가
                     start += display;
                     max = Math.max(start, max);
-                    if(start > 1000){
+                    if (start > 1000) {
                         max = start;
                         start %= 1000;
                     }
@@ -256,22 +282,26 @@ public class NewsService {
     @Scheduled(cron = "0 0 * * * *")
     @Transactional
     public void updateNewsHeadLine() {
+        LocalDateTime batchTime = LocalDateTime.now(); // 배치 실행 시간 기록
+        log.info("[News Headline Batch Start] time: {}", batchTime);
+
+        List<NewsSection> sections = List.of(
+                new NewsSection("https://news.naver.com/section/100", "정치"),
+                new NewsSection("https://news.naver.com/section/101", "경제"),
+                new NewsSection("https://news.naver.com/section/102", "사회"),
+                new NewsSection("https://news.naver.com/section/103", "생활/문화"),
+                new NewsSection("https://news.naver.com/section/104", "세계"),
+                new NewsSection("https://news.naver.com/section/105", "IT/과학")
+        );
+
+        List<News> newNewsList = new ArrayList<>(); // 새로 수집된 뉴스만 담을 리스트
+
         try {
-            LocalDateTime batchTime = LocalDateTime.now();
-            log.info("[News Headline Batch Start]  time : {} ", batchTime);
-            List<NewsSection> sections = List.of(
-                    new NewsSection("https://news.naver.com/section/100", "정치"),
-                    new NewsSection("https://news.naver.com/section/101", "경제"),
-                    new NewsSection("https://news.naver.com/section/102", "사회"),
-                    new NewsSection("https://news.naver.com/section/103", "생활/문화"),
-                    new NewsSection("https://news.naver.com/section/104", "세계"),
-                    new NewsSection("https://news.naver.com/section/105", "IT/과학")
-            );
-
-            List<News> newsList = new ArrayList<>();
-
             for (NewsSection section : sections) {
-                Document doc = Jsoup.connect(section.url()).get();
+                // Jsoup을 이용한 웹 크롤링
+                Document doc = Jsoup.connect(section.url())
+                        .timeout(5000) // 연결 타임아웃 5초 설정 (선택 사항)
+                        .get();
                 Elements newsLists = doc.select("ul[id^=_SECTION_HEADLINE_LIST_]");
 
                 for (Element newsListElem : newsLists) {
@@ -281,33 +311,29 @@ public class NewsService {
                         if (linkElem == null) continue;
 
                         String title = linkElem.text();
-                        String link = linkElem.attr("href");
 
-                        Element thumbnailContainer = item.selectFirst("a.sa_thumb_link img");
-                        String thumbnail = thumbnailContainer != null ? thumbnailContainer.attr("data-src") : "";
-
-                        Element summaryElem = item.selectFirst("div.sa_text_lede");
-                        String summary = summaryElem != null ? summaryElem.text() : "";
-
-                        newsList.add(News.builder()
+                        newNewsList.add(News.builder()
                                 .title(title)
-                                .link(link)
-                                .description(summary)
-                                .thumbnail(thumbnail)
                                 .category(section.name())
-                                .createdTime(batchTime)
+                                .createdTime(batchTime) // 배치 실행 시간을 생성 시간으로 기록
                                 .build());
                     }
                 }
             }
-            newsRepository.saveAll(newsList);
+
+            newsRepository.saveAll(newNewsList);
+
             newsRepository.deleteByCreatedTimeBefore(batchTime);
-            log.info("[News Headline Batch End]");
+
+            log.info("[News Headline Batch End] Fetched {} new news items. Deleted old news before {}.", newNewsList.size(), batchTime);
+
         } catch (Exception e) {
-            log.error("[News Service] updateNewsHeadLine");
-            throw new NotFound("뉴스정보를 가져올 수 없습니다.");
+            log.error("[News Headline Batch Error] An error occurred during news update: {}", e.getMessage(), e);
+
+            throw new NotFound("뉴스 정보를 가져오거나 갱신하는 중 오류가 발생했습니다.");
         }
     }
+
 
     public String naverSearchApi(String query, Integer display, Integer start) {
         if (display == null) display = 100;
@@ -343,7 +369,7 @@ public class NewsService {
             String imageUrl = null;
             String category = null;
             Document doc = Jsoup.connect(path).get();
-            if(path.contains("https://n.news.naver.com") || path.contains("https://news.naver.com")) {
+            if (path.contains("https://n.news.naver.com") || path.contains("https://news.naver.com")) {
                 Elements newsLists = doc.select("div[id^=img_a1]");
                 for (Element news : newsLists) {
                     Element img = news.selectFirst("img");
@@ -366,18 +392,18 @@ public class NewsService {
 
                 return newsInfo;
             }
-                Elements newsLists = doc.select("span[class^=ArticleImage_image_wrap]");
-                for (Element news : newsLists) {
-                    Element img = news.selectFirst("img");
-                    if (img != null) {
-                        imageUrl = img.attr("src");
-                        newsInfo.add(imageUrl);
-                        break;
-                    }
+            Elements newsLists = doc.select("span[class^=ArticleImage_image_wrap]");
+            for (Element news : newsLists) {
+                Element img = news.selectFirst("img");
+                if (img != null) {
+                    imageUrl = img.attr("src");
+                    newsInfo.add(imageUrl);
+                    break;
                 }
-                if(path.contains("sports")) newsInfo.add("스포츠");
-                newsInfo.add("엔터테인먼트");
-                if (newsInfo.size() < 2) return null;
+            }
+            if (path.contains("sports")) newsInfo.add("스포츠");
+            newsInfo.add("엔터테인먼트");
+            if (newsInfo.size() < 2) return null;
 
             return newsInfo;
         } catch (Exception e) {
@@ -386,55 +412,27 @@ public class NewsService {
         }
     }
 
-    public NewsSummaryResponse getSummary(String link) {
-        try {
-            Document doc = Jsoup.connect(link).get();
-            Elements article;
-            if(link.contains("https://n.news.naver.com") || link.contains("https://news.naver.com")) {
-                article = doc.select("article[id^=dic_area]");
-            } else {
-                article = doc.select("div[class=_article_content]");
-            }
-            if (!article.isEmpty()) {
-                article.select("strong, span, div, em, img, script, style, br").remove();
-
-                String plainText = article.text();
-
-                if (plainText.length() > 5000) {
-                    plainText = plainText.substring(0, 5000);
-                }
-
-                String prompt = String.format("""
-아래는 뉴스 기사 본문입니다:
----
-%s
----
-
-이 기사를 한국어로 약 400자 내외로 요약해 주세요.
-핵심 인물, 사건, 발언, 맥락을 포함해 주세요.
-간결하고 상세한 뉴스 요약문 형식으로 작성해 주세요.
-""", plainText);
-
-                String response = openAiChatModel.call(prompt);
-
-                return NewsSummaryResponse.builder()
-                        .summary(response)
-                        .build();
-            }
-            return null;
-        } catch (Exception e) {
-            log.error("[News Service] getSummary", e);
-            throw new NotFound("뉴스정보를 가져올 수 없습니다.");
-        }
-    }
-
     @Transactional
     public List<String> getUserFavorite(Long userId) {
-        List<Favorite> list = favoriteRepository.findByUserId(userId);
-        if (list.isEmpty()) return null;
-        return list.stream()
-                .map(Favorite::getNewsLink)
-                .collect(Collectors.toList());
+//        List<Favorite> list = favoriteRepository.findByUserId(userId);
+//        if (list.isEmpty()) return null;
+//        return list.stream()
+//                .map(Favorite::getNewsLink)
+//                .collect(Collectors.toList());
+        return null;
+    }
+
+    // TODO 유저가 좋아하는 목록을 받아온다. 카프카로
+    @Transactional
+    public Map<String, LocalDateTime> getUserFavorite2(Long userId) {
+        Map<String, LocalDateTime> favorites = new HashMap<>();
+        favorites.put("정치", LocalDateTime.now().minusHours(2)); // 현재 시간 2시간 전
+        favorites.put("경제", LocalDateTime.now().minusDays(1));  // 현재 시간 1일 전
+        favorites.put("IT/과학", LocalDateTime.now().minusMinutes(30)); // 현재 시간 30분 전
+        favorites.put("사회", LocalDateTime.now().minusDays(5));   // 현재 시간 5일 전
+        favorites.put("세계", LocalDateTime.now().minusWeeks(1));
+
+        return favorites;
     }
 
     public String dateParser(String input) {
