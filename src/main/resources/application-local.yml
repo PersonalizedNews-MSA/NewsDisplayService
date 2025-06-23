@@ -1,0 +1,46 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:mariadb://localhost:3306/team8?serverTimezone=UTC&characterEncoding=utf8
+    driver-class-name: org.mariadb.jdbc.Driver
+    username: ${DB_USERNAME} # .env 파일의 DB_USERNAME 변수 참조
+    password: ${DB_PASSWORD} # .env 파일의 DB_PASSWORD 변수 참조
+
+  jpa:
+    database-platform: org.hibernate.dialect.MariaDBDialect
+    hibernate:
+      ddl-auto: create
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY} # .env 파일의 OPENAI_API_KEY 변수 참조
+      chat:
+        options:
+          model: gpt-4o
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    # k8s-external-kafka-service:9092
+    consumer:
+      group-id: news-display-service-group
+
+jwt:
+  expires-in: 86400 # 1day
+  mobile-expires-in: 31536000
+  table-expires-in: 31536000
+  secret-key: ${JWT_SECRET_KEY} # .env 파일의 JWT_SECRET_KEY 변수 참조
+
+frontend:
+  origin: http://localhost:3000/
+
+naver:
+  client:
+    id: ${NAVER_CLIENT_ID} # .env 파일의 NAVER_CLIENT_ID 변수 참조
+  search:
+    key: ${NAVER_SEARCH_KEY} # .env 파일의 NAVER_SEARCH_KEY 변수 참조
