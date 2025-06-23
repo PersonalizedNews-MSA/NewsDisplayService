@@ -32,10 +32,16 @@ spring:
           model: gpt-4o
 
   kafka:
-    bootstrap-servers: localhost:9092
-    # k8s-external-kafka-service:9092
+    producer:
+      bootstrap-servers: localhost:9092
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer # ✅ 이 부분 변경
+
     consumer:
       group-id: news-display-service-group
+      enable-auto-commit: false # MANUAL AckMode 사용 시 필수
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer # ✅ 이 부분 확인
     listener:
       ack-mode: MANUAL
 

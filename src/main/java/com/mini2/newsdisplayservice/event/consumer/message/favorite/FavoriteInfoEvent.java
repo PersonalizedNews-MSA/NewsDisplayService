@@ -3,13 +3,15 @@ package com.mini2.newsdisplayservice.event.consumer.message.favorite;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Getter
 @Setter
 public class FavoriteInfoEvent {
     public static final String Topic = "UserFavoriteInfo";
 
     private String eventId;
-    private String timestamp; // LocaldateTime 형태
+    private LocalDateTime timestamp; // LocaldateTime 형태
 
     private String sourceService;
 
