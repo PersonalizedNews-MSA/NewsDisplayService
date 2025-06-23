@@ -14,7 +14,7 @@ pipeline {
         gitParameter branch: '',
                     branchFilter: '.*',
                     defaultValue: 'origin/main',
-                    description: '', listSize: '0',
+                    description: '빌드할 브랜치 혹은 태그선택 ㄱ', listSize: '0',
                     name: 'TAG',
                     quickFilterEnabled: false,
                     selectedValue: 'DEFAULT',
@@ -47,6 +47,19 @@ pipeline {
     }
 
     stages {
+        stage('Checkout SCM') {
+            steps {
+                script {
+                    // Git Parameter 플러그인을 통해 선택된 브랜치 또는 태그를 사용
+                    def checkoutTarget = "${params.TAG}"
+                    echo "Checking out Git target: ${checkoutTarget}"
+
+                    git branch: checkoutTarget, // 사용자가 선택한 브랜치/태그로 체크아웃
+                        credentialsId: GITHUB_CREDENTIAL,
+                        url: GIT_URL
+                }
+            }
+        }
         stage('Set Version') {
             steps {
                 script {
