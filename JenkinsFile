@@ -48,18 +48,23 @@ pipeline {
 
     stages {
         stage('Checkout SCM') {
-            steps {
-                script {
-                    // Git Parameter 플러그인을 통해 선택된 브랜치 또는 태그를 사용
-                    def checkoutTarget = "${params.TAG}"
-                    echo "Checking out Git target: ${checkoutTarget}"
+                    steps {
+                        script {
+                            // Git Parameter 플러그인을 통해 선택된 브랜치 또는 태그를 사용
+                            def checkoutTarget = "${params.TAG}"
+                            echo "Checking out Git target: ${checkoutTarget}"
 
-                    git branch: checkoutTarget, // 사용자가 선택한 브랜치/태그로 체크아웃
-                        credentialsId: GITHUB_CREDENTIAL,
-                        url: GIT_URL
+                            // !!! 핵심 수정: checkoutTarget에서 'origin/' 접두사를 제거합니다. !!!
+                            def actualBranch = checkoutTarget.startsWith('origin/') ? checkoutTarget.substring('origin/'.length()) : checkoutTarget
+
+                            // Git SCM 체크아웃
+                            // branch 파라미터는 'main', 'develop', 'feat/kafkaConsumor' 와 같은 형태를 기대합니다.
+                            git branch: actualBranch, // 수정된 부분: actualBranch 사용
+                                credentialsId: GITHUB_CREDENTIAL,
+                                url: GIT_URL
+                        }
+                    }
                 }
-            }
-        }
         stage('Set Version') {
             steps {
                 script {
