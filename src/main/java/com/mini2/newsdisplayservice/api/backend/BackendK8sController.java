@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
 @RestController
-@RequestMapping(value = "/backend/user/v1/k8s", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping(value = "/backend/newsdisplay/v1/k8s", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class BackendK8sController {
     private final ProbeService probeService;
