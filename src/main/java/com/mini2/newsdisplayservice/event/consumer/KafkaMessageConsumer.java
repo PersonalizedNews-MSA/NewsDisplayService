@@ -3,7 +3,7 @@ package com.mini2.newsdisplayservice.event.consumer;
 import com.mini2.newsdisplayservice.event.consumer.message.favorite.FavoriteInfoEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
+//import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class KafkaMessageConsumer {
-    private final StringRedisTemplate stringRedisTemplate;
+//    private final StringRedisTemplate stringRedisTemplate;
 
     @KafkaListener(topics = FavoriteInfoEvent.Topic, properties = {
             JsonDeserializer.VALUE_DEFAULT_TYPE +
