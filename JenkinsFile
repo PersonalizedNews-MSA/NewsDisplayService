@@ -76,7 +76,7 @@ pipeline {
                             script: "gradle -q getAppVersion",
                             returnStdout: true
                     ).trim()
-                    
+
                     // !!! 핵심 수정: APP_NAME을 소문자로 변환합니다. !!!
                     def lowerCaseAppName = APP_NAME.toLowerCase()
 
