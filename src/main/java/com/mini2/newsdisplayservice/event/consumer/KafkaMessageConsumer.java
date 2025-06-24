@@ -39,7 +39,7 @@ public class KafkaMessageConsumer {
         LocalDateTime createdTime = payload.getCreatedTime();
 
         log.info("FavoriteInfoEvent 처리. 보낸사람={}, 좋아요카테고리 = {}", event.getSourceService(), payload.getUserId());
-
+        log.info("제발되라제발 userId={}, newsId={}, eventType={}, newsCategory={}, createdTime={}", userId, newsId, eventType, newsCategory, createdTime);
 
         // Redis Key: user:{userId}:좋아요
         String redisKey = "user:" + userId + ":favorites";
