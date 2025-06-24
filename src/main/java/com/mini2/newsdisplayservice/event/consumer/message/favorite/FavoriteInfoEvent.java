@@ -30,10 +30,10 @@ public class FavoriteInfoEvent {
         @JsonProperty("newsId")
         private String newsId;
 
-        @JsonProperty("news_category")
+
         private String newsCategory;
 
-        @JsonProperty("created_time")
+        
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
         private LocalDateTime createdTime;
     }
