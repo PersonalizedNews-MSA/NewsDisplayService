@@ -10,6 +10,8 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,7 +36,7 @@ public class KafkaMessageConsumer {
         String newsId = payload.getNewsId();
         String eventType = event.getEventId();
         String newsCategory = payload.getNewsCategory();
-        String createdTime = payload.getCreatedTime();
+        LocalDateTime createdTime = payload.getCreatedTime();
 
         log.info("FavoriteInfoEvent 처리. 보낸사람={}, 좋아요카테고리 = {}", event.getSourceService(), payload.getUserId());
 
@@ -43,10 +45,10 @@ public class KafkaMessageConsumer {
         String redisKey = "user:" + userId + ":favorites";
 
         // 이벤트 타입에 따라 Redis Set에 추가 또는 제거
-        if ("좋아요_등록".equalsIgnoreCase(eventType)) { // 대소문자 무시
+        if ("좋아요 등록".equalsIgnoreCase(eventType)) { // 대소문자 무시
             stringRedisTemplate.opsForSet().add(redisKey, newsId);
             log.info("Redis에 북마크(하트) 추가됨: Key={}, NewsId={}", redisKey, newsId);
-        } else if ("좋아요_취소".equalsIgnoreCase(eventType)) { // 대소문자 무시
+        } else if ("좋아요 취소".equalsIgnoreCase(eventType)) { // 대소문자 무시
             stringRedisTemplate.opsForSet().remove(redisKey, newsId);
             log.info("Redis에서 북마크(하트) 제거됨: Key={}, NewsId={}", redisKey, newsId);
         } else {
