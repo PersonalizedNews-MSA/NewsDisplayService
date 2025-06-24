@@ -8,12 +8,12 @@ spring:
     username: ${DB_USERNAME} # .env 파일의 DB_USERNAME 변수 참조
     password: ${DB_PASSWORD} # .env 파일의 DB_PASSWORD 변수 참조
 
-  data:
-    redis:
-      host: redis # Redis 서버 IP 또는 도메인
-      port: 6379      # Redis 기본 포트
-      password:       # Redis 비밀번호 (설정했다면)
-      timeout: 5000   # 연결 타임아웃 (ms)
+#  data:
+#    redis:
+#      host: redis # Redis 서버 IP 또는 도메인
+#      port: 6379      # Redis 기본 포트
+#      password:       # Redis 비밀번호 (설정했다면)
+#      timeout: 5000   # 연결 타임아웃 (ms)
 
   jpa:
     database-platform: org.hibernate.dialect.MariaDBDialect
@@ -50,9 +50,6 @@ jwt:
   mobile-expires-in: 31536000
   table-expires-in: 31536000
   secret-key: ${JWT_SECRET_KEY} # .env 파일의 JWT_SECRET_KEY 변수 참조
-
-frontend:
-  origin: http://localhost:3000/
 
 naver:
   client:
