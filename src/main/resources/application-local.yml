@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mysql://localhost:13301/mini2?serverTimezone=UTC&characterEncoding=utf8 # MySQL JDBC URL로 변경
+    url: jdbc:mysql://localhost:13301/news?serverTimezone=UTC&characterEncoding=utf8 # MySQL JDBC URL로 변경
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME} # .env 파일의 DB_USERNAME 변수 참조
     password: ${DB_PASSWORD} # .env 파일의 DB_PASSWORD 변수 참조
