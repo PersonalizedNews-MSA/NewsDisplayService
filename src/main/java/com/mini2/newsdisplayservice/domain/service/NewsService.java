@@ -11,6 +11,7 @@ import com.mini2.newsdisplayservice.domain.entity.News;
 import com.mini2.newsdisplayservice.domain.repository.NewsRepository;
 import com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoriteNewsInfoDto;
 import com.mini2.newsdisplayservice.event.consumer.message.service.FavoriteNewsInfoService;
+import com.mini2.newsdisplayservice.event.consumer.message.service.UserInterestService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -56,6 +57,8 @@ public class NewsService {
 
     private final ObjectMapper objectMapper;
     private final FavoriteNewsInfoService favoriteNewsInfoService;
+    private final UserInterestService userInterestService;
+
     @Value("${naver.client.id}")
     private String CLIENT_ID;
     @Value("${naver.search.key}")
@@ -119,16 +122,17 @@ public class NewsService {
 
     @Transactional
     public String getKeyword(Long userId) {
-        // TODO 바꿀 것
-        List<String> interests = Arrays.asList("게임", "스텔라 블레이드", "김형태");
+
+        List<String> interests = userInterestService.getUserLatestInterests(userId);
 
         String interestStr = String.join(", ", interests);
 
-//        List<News> newsList = newsRepository.findAll();
-        String titles = "null";
-//                newsList.stream()
-//                .map(news -> news.getTitle() + " (" + news.getCategory() + ")")
-//                .collect(Collectors.joining("\n- ", "- ", ""));
+        List<News> newsList = newsRepository.findAll();
+        log.info("newsList 까지 {}", newsList.size());
+        String titles =
+                newsList.stream()
+                .map(news -> news.getTitle() + " (" + news.getCategory() + ")")
+                .collect(Collectors.joining("\n- ", "- ", ""));
 
         // TODO 최근에 좋아요 누른거 10개 중에서 가장 빈도높은 카테고리 보내기
         String favoriteStr = getTopTwoCategoryInterestsForGPT(userId);
