@@ -237,6 +237,7 @@ public class NewsService {
         List<String> favorites = getUserFavorite(userId);
         int max = 0;
         start = start != null ? start %= 1000 : start;
+
         outer:
         for (String k : keywords) {
             int collected = 0;
@@ -244,6 +245,7 @@ public class NewsService {
             int display = 20;
             while (collected < perKeywordSize) {
                 String response = naverSearchApi(k, display, start);
+
 
                 try {
                     JsonNode root = objectMapper.readTree(response);
@@ -256,6 +258,8 @@ public class NewsService {
 
                     for (JsonNode item : items) {
                         String link = item.path("link").asText();
+
+                        // 1. 네이버 뉴스 링크만 필터링
                         if (!link.contains("https://n.news.naver.com") &&
                                 !link.contains("https://news.naver.com") &&
                                 !link.contains("https://m.sports.naver.com") &&
@@ -263,12 +267,22 @@ public class NewsService {
                         ) {
                             continue;
                         }
+
+                        // 2. 중복 뉴스 필터링
                         if (dtos.stream().anyMatch(dto -> dto.getLink().equals(link))) {
                             continue;
                         }
 
                         String title = Jsoup.parse(item.path("title").asText()).text();
                         String description = Jsoup.parse(item.path("description").asText()).text();
+
+                        // 3. 영어 뉴스 필터링 로직
+
+                        if (isEnglishHeavy(description, 0.7)) { // 70% 이상이 영어 알파벳이면 필터링
+                            log.debug("영어 뉴스 필터링됨: {}", link);
+                            continue;
+                        }
+
                         List<String> newsInfo = getNewsInfo(link);
                         if (newsInfo == null) continue;
                         String pubDate = dateParser(Jsoup.parse(item.path("pubDate").asText()).text());
@@ -309,6 +323,36 @@ public class NewsService {
                 .newsList(dtos)
                 .start(max)
                 .build();
+    }
+
+    private boolean isEnglishHeavy(String text, double englishRatioThreshold) {
+        if (text == null || text.trim().isEmpty()) {
+            return false;
+        }
+
+        int totalChars = 0;
+        int englishChars = 0;
+
+        for (char c : text.toCharArray()) {
+            // 알파벳이거나 숫자, 공백 등은 일단 포함
+            if (Character.isLetter(c)) {
+                totalChars++;
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+                    englishChars++;
+                }
+            } else if (Character.isDigit(c) || Character.isWhitespace(c)) {
+                // 숫자나 공백은 총 글자 수에 포함하지 않아 비율 계산에 영향 덜 주도록
+                continue;
+            } else {
+                // 한글 등 다른 언어 문자
+                totalChars++;
+            }
+        }
+
+        if (totalChars == 0) return false; // 글자가 없으면 영어로 판단 안함
+
+        double ratio = (double) englishChars / totalChars;
+        return ratio >= englishRatioThreshold;
     }
 
 
