@@ -1,9 +1,9 @@
 package com.mini2.newsdisplayservice.event.consumer.message.favorite.trash;
 
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.FavoriteInfoEvent;
+import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteEventDto;
 import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteNewsInfoDto;
+import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoritePayloadDto;
 import com.mini2.newsdisplayservice.event.consumer.message.favorite.service.FavoriteNewsInfoService;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.trash.KafkaMessageProducer; // 이전에 만든 KafkaMessageProducer 임포트
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime; // LocalDateTime 사용을 위해 임포트
 import java.util.List;
-import java.util.Set;
 
 
 @Slf4j // Lombok을 사용하여 로그 객체를 자동 생성
@@ -48,17 +47,16 @@ public class trashController {
     }
 
     @PostMapping("/send")
-    public ResponseEntity<String> sendKafkaMessage(@RequestBody FavoriteInfoEvent.Payload payload) {
+    public ResponseEntity<String> sendKafkaMessage(@RequestBody FavoritePayloadDto payload) {
         try {
-            // FavoriteInfoEvent 객체를 생성하고 Payload를 설정
-            FavoriteInfoEvent event = new FavoriteInfoEvent();
-            event.setEventId("좋아요_등록");
+            FavoriteEventDto event = new FavoriteEventDto();
+            event.setEventId("좋아요 등록");
             event.setTimestamp(LocalDateTime.now());
             event.setSourceService("test-api-service"); // 이 API를 통해 보냈음을 나타냄
             event.setPayload(payload); // 요청 본문에서 받은 payload 설정
 
             // KafkaMessageProducer를 사용하여 메시지 전송
-            kafkaMessageProducer.send(FavoriteInfoEvent.Topic, event);
+            kafkaMessageProducer.send(FavoriteEventDto.Topic, event);
 
             log.info("Kafka 메시지 전송 요청 성공: {}", event);
             return new ResponseEntity<>("Kafka 메시지 전송 성공", HttpStatus.OK);

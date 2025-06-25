@@ -1,7 +1,10 @@
 package com.mini2.newsdisplayservice.event.consumer;
 
-import com.mini2.newsdisplayservice.domain.service.NewsService;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.FavoriteInfoEvent;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteEventDto;
+import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteNewsInfoDto;
+import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoritePayloadDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -17,21 +20,21 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class KafkaMessageConsumer {
     private final StringRedisTemplate stringRedisTemplate;
-//    private final NewsService newsService;
+    private final ObjectMapper objectMapper;
 
-    @KafkaListener(topics = FavoriteInfoEvent.Topic, properties = {
+    @KafkaListener(topics = FavoriteEventDto.Topic, properties = {
             JsonDeserializer.VALUE_DEFAULT_TYPE +
-                    ":com.mini2.newsdisplayservice.event.consumer.message.favorite.FavoriteInfoEvent"
+                    ":com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteEventDto"
     })
-    void handleFavoriteInfoEvent(FavoriteInfoEvent event, Acknowledgment ack) {
-        log.warn("크아악 창섭이형");
+    void handleFavoriteInfoEvent(FavoriteEventDto event, Acknowledgment ack) {
+
         if(event==null || event.getPayload()==null) {
             log.warn("수신된 FavoriteInfoEvent가 null이거나 payload가 없습니다. 메시지: {}", event);
             ack.acknowledge(); // 유효하지 않은 메시지라도 일단 처리 완료로 간주
             return;
         }
 
-        FavoriteInfoEvent.Payload payload = event.getPayload();
+        FavoritePayloadDto payload = event.getPayload();
         String userId = payload.getUserId();
         String newsId = payload.getNewsId();
         String eventType = event.getEventId();
@@ -41,16 +44,36 @@ public class KafkaMessageConsumer {
         log.info("FavoriteInfoEvent 처리. 보낸사람={}, 좋아요카테고리 = {}", event.getSourceService(), payload.getUserId());
         log.info("제발되라제발 userId={}, newsId={}, eventType={}, newsCategory={}, createdTime={}", userId, newsId, eventType, newsCategory, createdTime);
 
-        // Redis Key: user:{userId}:좋아요
-        String redisKey = "user:" + userId + ":favorites";
+        String userFavoritesRedisKey = "user:" + userId + ":favorites"; // 사용자 즐겨찾기 Set 키
+        String newsDetailRedisKey = "news:" + newsId; // 뉴스 상세 정보 String 키
 
         // 이벤트 타입에 따라 Redis Set에 추가 또는 제거
-        if ("좋아요 등록".equalsIgnoreCase(eventType)) { // 대소문자 무시
-            stringRedisTemplate.opsForSet().add(redisKey, newsId);
-            log.info("Redis에 북마크(하트) 추가됨: Key={}, NewsId={}", redisKey, newsId);
-        } else if ("좋아요 취소".equalsIgnoreCase(eventType)) { // 대소문자 무시
-            stringRedisTemplate.opsForSet().remove(redisKey, newsId);
-            log.info("Redis에서 북마크(하트) 제거됨: Key={}, NewsId={}", redisKey, newsId);
+        if ("좋아요 등록".equalsIgnoreCase(eventType)) {
+            // 1. user:{userId}:favorites Set에 newsId 추가
+            stringRedisTemplate.opsForSet().add(userFavoritesRedisKey, newsId);
+            log.info("Redis에 북마크(하트) 추가됨: Key={}, NewsId={}", userFavoritesRedisKey, newsId);
+
+            // 2. news:{newsId} String에 뉴스 상세 정보(JSON) 저장 또는 업데이트
+            try {
+                FavoriteNewsInfoDto newsDtoToStore = new FavoriteNewsInfoDto();
+                newsDtoToStore.setNewsId(newsId);
+                newsDtoToStore.setNewsCategory(newsCategory);
+                newsDtoToStore.setCreatedTime(createdTime);
+
+
+                // FavoriteNewsInfoDto 객체를 JSON 문자열로 변환
+                String newsJson = objectMapper.writeValueAsString(newsDtoToStore);
+                stringRedisTemplate.opsForValue().set(newsDetailRedisKey, newsJson);
+
+                log.info("Redis에 뉴스 상세 정보 JSON 저장됨: Key={}, JSON={}", newsDetailRedisKey, newsJson);
+
+            } catch (JsonProcessingException e) {
+                log.error("뉴스 ID {}의 상세 정보 JSON 직렬화 오류: 오류={}", newsId, e.getMessage(), e);
+            }
+
+        } else if ("좋아요 취소".equalsIgnoreCase(eventType)) {
+            stringRedisTemplate.opsForSet().remove(userFavoritesRedisKey, newsId);
+            log.info("Redis에서 북마크(하트) 제거됨: Key={}, NewsId={}", userFavoritesRedisKey, newsId);
         } else {
             log.warn("알 수 없는 북마크 이벤트 타입: {}. Payload: {}", eventType, payload);
         }

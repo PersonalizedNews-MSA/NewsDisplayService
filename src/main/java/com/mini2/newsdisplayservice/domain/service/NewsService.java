@@ -173,10 +173,8 @@ public class NewsService {
         List<LikeEvent> likeEvents = favorites.stream()
                 .map(dto -> {
                     try {
-                        // created_time이 LocalDateTime으로 변환 가능한지 확인 필요
-                        // 예외 처리 또는 유효성 검사 추가 고려
-                        LocalDateTime timestamp = LocalDateTime.parse(dto.getCreated_time());
-                        return new LikeEvent(dto.getNews_category(), timestamp);
+                        LocalDateTime timestamp = dto.getCreatedTime();
+                        return new LikeEvent(dto.getNewsId(), timestamp);
                     } catch (Exception e) {
                         log.error("FavoriteNewsInfoDto에서 LikeEvent 변환 중 오류 발생: {}", dto, e);
                         return null; // 변환 실패 시 null 반환 (아래에서 필터링)
