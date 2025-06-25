@@ -1,4 +1,4 @@
-package com.mini2.newsdisplayservice.domain.controller;
+package com.mini2.newsdisplayservice.api.open;
 
 
 import com.mini2.newsdisplayservice.common.web.context.GatewayRequestHeaderUtils;
