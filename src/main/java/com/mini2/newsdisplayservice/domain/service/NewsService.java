@@ -138,12 +138,12 @@ public class NewsService {
         // TODO 최근에 좋아요 누른거 10개 중에서 가장 빈도높은 카테고리 보내기
         String favoriteStr = getTopTwoCategoryInterestsForGPT(userId);
 
-        return openAiChatModel.call(
+        String result = openAiChatModel.call(
                 """
                         1. 사용자의 관심사는 다음과 같습니다:
                         %s
                         2. 사용자가 좋아하는 뉴스 카테고리의 점수는 다음과 같습니다(100점 만점) :
-                        %s
+                        %s <- favoriteStr (빈 문자열 가능, 특히 Kafka 메시지가 없으면 여기서 빈 문자열)
                         3. 오늘의 뉴스 헤드라인과 카테고리는 다음과 같습니다:
                         %s
                         
@@ -161,6 +161,8 @@ public class NewsService {
                         """.formatted(interestStr, favoriteStr, titles)
 
         );
+        log.info("GPT Keyword: {}", result);
+        return result;
     }
 
     public String getTopTwoCategoryInterestsForGPT(Long userId) {
