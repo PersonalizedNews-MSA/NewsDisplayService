@@ -165,7 +165,7 @@ public class NewsService {
 
     public String getTopTwoCategoryInterestsForGPT(Long userId) {
         List<FavoriteNewsInfoDto> favorites = favoriteNewsInfoService.getTop10Favoriets(userId);
-
+        System.out.println(favorites);
         /** TODO 각 카테고리에 대해:
          //선호 점수 = 관심사 포함 여부 (2점) + 좋아요 뉴스 수 (1점/개수)
          //최종 점수 = (좋아요 점수 * 가중치1) + (관심사 매칭 점수 * 가중치2)
@@ -178,7 +178,7 @@ public class NewsService {
                 .map(dto -> {
                     try {
                         LocalDateTime timestamp = dto.getCreatedTime();
-                        return new LikeEvent(dto.getNewsId(), timestamp);
+                        return new LikeEvent(dto.getNewsCategory(), timestamp);
                     } catch (Exception e) {
                         log.error("FavoriteNewsInfoDto에서 LikeEvent 변환 중 오류 발생: {}", dto, e);
                         return null; // 변환 실패 시 null 반환 (아래에서 필터링)
@@ -187,7 +187,7 @@ public class NewsService {
                 .filter(Objects::nonNull) // 변환에 실패한 null 이벤트 필터링
                 .collect(Collectors.toList());
 
-        log.info("likeEvents: {}",likeEvents);
+        log.info("likeEvents 카테고리: {}, 만든시간 {}",likeEvents.get(0).getCategory(), likeEvents.get(0).getCreatedAt());
         // 3. 변환된 LikeEvent 리스트로 실제 점수 계산 로직 호출
         Map<String, Double> finalScores = calculateCategoryScores(likeEvents);
         log.info("finalScores: {}", finalScores);
