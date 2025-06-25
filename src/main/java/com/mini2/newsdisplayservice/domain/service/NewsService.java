@@ -6,12 +6,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mini2.newsdisplayservice.common.exception.kind.NotFound;
 import com.mini2.newsdisplayservice.domain.dto.NewsResponse;
 import com.mini2.newsdisplayservice.domain.dto.NewsResultResponse;
-import com.mini2.newsdisplayservice.domain.dto.NewsSummaryResponse;
 import com.mini2.newsdisplayservice.domain.dto.favorite.LikeEvent;
 import com.mini2.newsdisplayservice.domain.entity.News;
 import com.mini2.newsdisplayservice.domain.repository.NewsRepository;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteNewsInfoDto;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.service.FavoriteNewsInfoService;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoriteNewsInfoDto;
+import com.mini2.newsdisplayservice.event.consumer.message.service.FavoriteNewsInfoService;
+import com.mini2.newsdisplayservice.event.consumer.message.service.UserInterestService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -57,6 +57,8 @@ public class NewsService {
 
     private final ObjectMapper objectMapper;
     private final FavoriteNewsInfoService favoriteNewsInfoService;
+    private final UserInterestService userInterestService;
+
     @Value("${naver.client.id}")
     private String CLIENT_ID;
     @Value("${naver.search.key}")
@@ -89,6 +91,7 @@ public class NewsService {
         for (LikeEvent event : likeEvents) {
             String category = event.getCategory();
             LocalDateTime likedAt = event.getCreatedAt();
+            log.info("점수계산용 로그 : category={}",category);
 
             // 좋아요를 누른 시점과 현재 시점의 차이 계산 (밀리초 단위)
             long durationMillis = Duration.between(likedAt, now).toMillis();
@@ -120,16 +123,17 @@ public class NewsService {
 
     @Transactional
     public String getKeyword(Long userId) {
-        // TODO 바꿀 것
-        List<String> interests = Arrays.asList("게임", "스텔라 블레이드", "김형태");
+
+        List<String> interests = userInterestService.getUserLatestInterests(userId);
 
         String interestStr = String.join(", ", interests);
 
-//        List<News> newsList = newsRepository.findAll();
-        String titles = "null";
-//                newsList.stream()
-//                .map(news -> news.getTitle() + " (" + news.getCategory() + ")")
-//                .collect(Collectors.joining("\n- ", "- ", ""));
+        List<News> newsList = newsRepository.findAll();
+        log.info("newsList 까지 {}", newsList.size());
+        String titles =
+                newsList.stream()
+                .map(news -> news.getTitle() + " (" + news.getCategory() + ")")
+                .collect(Collectors.joining("\n- ", "- ", ""));
 
         // TODO 최근에 좋아요 누른거 10개 중에서 가장 빈도높은 카테고리 보내기
         String favoriteStr = getTopTwoCategoryInterestsForGPT(userId);
@@ -161,7 +165,7 @@ public class NewsService {
 
     public String getTopTwoCategoryInterestsForGPT(Long userId) {
         List<FavoriteNewsInfoDto> favorites = favoriteNewsInfoService.getTop10Favoriets(userId);
-
+        System.out.println(favorites);
         /** TODO 각 카테고리에 대해:
          //선호 점수 = 관심사 포함 여부 (2점) + 좋아요 뉴스 수 (1점/개수)
          //최종 점수 = (좋아요 점수 * 가중치1) + (관심사 매칭 점수 * 가중치2)
@@ -174,17 +178,19 @@ public class NewsService {
                 .map(dto -> {
                     try {
                         LocalDateTime timestamp = dto.getCreatedTime();
-                        return new LikeEvent(dto.getNewsId(), timestamp);
+                        return new LikeEvent(dto.getNewsCategory(), timestamp);
                     } catch (Exception e) {
                         log.error("FavoriteNewsInfoDto에서 LikeEvent 변환 중 오류 발생: {}", dto, e);
                         return null; // 변환 실패 시 null 반환 (아래에서 필터링)
                     }
                 })
-                .filter(event -> event != null) // 변환에 실패한 null 이벤트 필터링
+                .filter(Objects::nonNull) // 변환에 실패한 null 이벤트 필터링
                 .collect(Collectors.toList());
 
+        log.info("likeEvents 카테고리: {}, 만든시간 {}",likeEvents.get(0).getCategory(), likeEvents.get(0).getCreatedAt());
         // 3. 변환된 LikeEvent 리스트로 실제 점수 계산 로직 호출
         Map<String, Double> finalScores = calculateCategoryScores(likeEvents);
+        log.info("finalScores: {}", finalScores);
         System.out.println("--- 카테고리별 최종 점수 (시간 가중치 및 최대 점수 제한 적용) ---");
         finalScores.entrySet().stream()
                 .sorted(Map.Entry.<String, Double>comparingByValue().reversed()) // 점수가 높은 순으로 정렬
@@ -231,6 +237,7 @@ public class NewsService {
         List<String> favorites = getUserFavorite(userId);
         int max = 0;
         start = start != null ? start %= 1000 : start;
+
         outer:
         for (String k : keywords) {
             int collected = 0;
@@ -238,6 +245,7 @@ public class NewsService {
             int display = 20;
             while (collected < perKeywordSize) {
                 String response = naverSearchApi(k, display, start);
+
 
                 try {
                     JsonNode root = objectMapper.readTree(response);
@@ -250,6 +258,8 @@ public class NewsService {
 
                     for (JsonNode item : items) {
                         String link = item.path("link").asText();
+
+                        // 1. 네이버 뉴스 링크만 필터링
                         if (!link.contains("https://n.news.naver.com") &&
                                 !link.contains("https://news.naver.com") &&
                                 !link.contains("https://m.sports.naver.com") &&
@@ -257,12 +267,22 @@ public class NewsService {
                         ) {
                             continue;
                         }
+
+                        // 2. 중복 뉴스 필터링
                         if (dtos.stream().anyMatch(dto -> dto.getLink().equals(link))) {
                             continue;
                         }
 
                         String title = Jsoup.parse(item.path("title").asText()).text();
                         String description = Jsoup.parse(item.path("description").asText()).text();
+
+                        // 3. 영어 뉴스 필터링 로직
+
+                        if (isEnglishHeavy(description, 0.7)) { // 70% 이상이 영어 알파벳이면 필터링
+                            log.debug("영어 뉴스 필터링됨: {}", link);
+                            continue;
+                        }
+
                         List<String> newsInfo = getNewsInfo(link);
                         if (newsInfo == null) continue;
                         String pubDate = dateParser(Jsoup.parse(item.path("pubDate").asText()).text());
@@ -303,6 +323,36 @@ public class NewsService {
                 .newsList(dtos)
                 .start(max)
                 .build();
+    }
+
+    private boolean isEnglishHeavy(String text, double englishRatioThreshold) {
+        if (text == null || text.trim().isEmpty()) {
+            return false;
+        }
+
+        int totalChars = 0;
+        int englishChars = 0;
+
+        for (char c : text.toCharArray()) {
+            // 알파벳이거나 숫자, 공백 등은 일단 포함
+            if (Character.isLetter(c)) {
+                totalChars++;
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+                    englishChars++;
+                }
+            } else if (Character.isDigit(c) || Character.isWhitespace(c)) {
+                // 숫자나 공백은 총 글자 수에 포함하지 않아 비율 계산에 영향 덜 주도록
+                continue;
+            } else {
+                // 한글 등 다른 언어 문자
+                totalChars++;
+            }
+        }
+
+        if (totalChars == 0) return false; // 글자가 없으면 영어로 판단 안함
+
+        double ratio = (double) englishChars / totalChars;
+        return ratio >= englishRatioThreshold;
     }
 
 

@@ -1,4 +1,4 @@
-package com.mini2.newsdisplayservice.event.consumer.message.favorite.dto;
+package com.mini2.newsdisplayservice.event.consumer.message.dto.favorite;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;

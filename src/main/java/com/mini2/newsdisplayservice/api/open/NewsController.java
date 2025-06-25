@@ -1,13 +1,11 @@
-package com.mini2.newsdisplayservice.domain.controller;
+package com.mini2.newsdisplayservice.api.open;
 
 
 import com.mini2.newsdisplayservice.common.web.context.GatewayRequestHeaderUtils;
 import com.mini2.newsdisplayservice.domain.dto.NewsResponse;
 import com.mini2.newsdisplayservice.domain.dto.NewsResultResponse;
 import com.mini2.newsdisplayservice.domain.service.NewsService;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.service.FavoriteNewsInfoService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
