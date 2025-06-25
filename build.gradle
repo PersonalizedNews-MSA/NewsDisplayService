@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.mini2'
-version = '0.0.1'
+version = '0.0.3'
 
 java {
     toolchain {
@@ -46,10 +46,14 @@ dependencies {
 
     implementation 'org.springframework.cloud:spring-cloud-starter'
     compileOnly 'org.projectlombok:lombok'
-    runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
+//    implementation 'org.mariadb.jdbc:mariadb-java-client'
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    runtimeOnly 'com.mysql:mysql-connector-j'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // redis
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     // 스프링클라우드
     implementation 'org.springframework.cloud:spring-cloud-starter-gateway-server-webmvc'
@@ -65,6 +69,8 @@ dependencies {
 
     // Kafka
     implementation 'org.springframework.kafka:spring-kafka' // Kafka starter 의존성 추가 필요
+    // JSON 직렬화를 위한 Jackson 라이브러리도 필요
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
 }
 
 

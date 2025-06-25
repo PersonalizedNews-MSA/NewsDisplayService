@@ -1,9 +1,11 @@
 package com.mini2.newsdisplayservice.domain.controller;
 
 
+import com.mini2.newsdisplayservice.common.web.context.GatewayRequestHeaderUtils;
 import com.mini2.newsdisplayservice.domain.dto.NewsResponse;
 import com.mini2.newsdisplayservice.domain.dto.NewsResultResponse;
 import com.mini2.newsdisplayservice.domain.service.NewsService;
+import com.mini2.newsdisplayservice.event.consumer.message.favorite.service.FavoriteNewsInfoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,11 +24,14 @@ public class NewsController {
 
     private final NewsService newsService;
 
+
     //TODO 1L 로 입력한 것은 임시입니다. 지워야합니다.
     @Operation(summary = "헤드라인 뉴스 목록 조회", description = "최신 헤드라인 뉴스 목록을 조회합니다.")
     @GetMapping("/")
     public ResponseEntity<List<NewsResponse>> getNews() {
-        List<NewsResponse> newsList = newsService.getNews(1L);
+        Long userId = Long.parseLong(GatewayRequestHeaderUtils.getUserIdOrThrowException()); // 헤더에서 사용자 ID 가져오기
+
+        List<NewsResponse> newsList = newsService.getNews(userId);
         return ResponseEntity.ok(newsList);
     }
 
@@ -35,9 +40,11 @@ public class NewsController {
     public ResponseEntity<NewsResultResponse> getPrompt(
             @RequestParam(defaultValue = "1") int startPage
     ) {
-        String prompt = newsService.getKeyword(1L);
+        Long userId = Long.parseLong(GatewayRequestHeaderUtils.getUserIdOrThrowException()); // 헤더에서 사용자 ID 가져오기
 
-        NewsResultResponse response = newsService.getResponse(prompt, startPage, 1L);
+        String prompt = newsService.getKeyword(userId);
+
+        NewsResultResponse response = newsService.getResponse(prompt, startPage, userId);
         return ResponseEntity.ok(response);
     }
 }

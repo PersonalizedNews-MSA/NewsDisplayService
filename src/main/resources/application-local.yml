@@ -3,13 +3,20 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mariadb://localhost:3306/mini2?serverTimezone=UTC&characterEncoding=utf8
-    driver-class-name: org.mariadb.jdbc.Driver
+    url: jdbc:mysql://localhost:13301/news?serverTimezone=UTC&characterEncoding=utf8 # MySQL JDBC URL로 변경
+    driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME} # .env 파일의 DB_USERNAME 변수 참조
     password: ${DB_PASSWORD} # .env 파일의 DB_PASSWORD 변수 참조
 
+  data:
+    redis:
+      host: localhost # Redis 서버 IP 또는 도메인
+      port: 6379      # Redis 기본 포트
+      password:      # Redis 비밀번호 (설정했다면)
+      timeout: 5000   # 연결 타임아웃 (ms)
+
   jpa:
-    database-platform: org.hibernate.dialect.MariaDBDialect
+    database-platform: org.hibernate.dialect.MySQLDialect
     hibernate:
       ddl-auto: create
     show-sql: true
@@ -25,19 +32,25 @@ spring:
           model: gpt-4o
 
   kafka:
-    bootstrap-servers: localhost:9092
-    # k8s-external-kafka-service:9092
+    producer:
+      bootstrap-servers: localhost:9092
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer # ✅ 이 부분 변경
+
     consumer:
       group-id: news-display-service-group
+      bootstrap-servers: localhost:9092
+      enable-auto-commit: false # MANUAL AckMode 사용 시 필수
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer # ✅ 이 부분 확인
+    listener:
+      ack-mode: MANUAL
 
 jwt:
   expires-in: 86400 # 1day
   mobile-expires-in: 31536000
   table-expires-in: 31536000
   secret-key: ${JWT_SECRET_KEY} # .env 파일의 JWT_SECRET_KEY 변수 참조
-
-frontend:
-  origin: http://localhost:3000/
 
 naver:
   client:

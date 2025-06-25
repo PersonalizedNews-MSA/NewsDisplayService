@@ -1,4 +1,6 @@
-FROM ubuntu:latest
-LABEL authors="user"
-
-ENTRYPOINT ["top", "-b"]
+FROM amazoncorretto:17
+LABEL maintainer=dev@mini2.com
+VOLUME /tmp
+EXPOSE 8080
+COPY build/libs/*.jar /app.jar
+ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app.jar"]

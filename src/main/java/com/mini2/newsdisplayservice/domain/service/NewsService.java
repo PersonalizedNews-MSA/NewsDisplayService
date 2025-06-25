@@ -10,6 +10,8 @@ import com.mini2.newsdisplayservice.domain.dto.NewsSummaryResponse;
 import com.mini2.newsdisplayservice.domain.dto.favorite.LikeEvent;
 import com.mini2.newsdisplayservice.domain.entity.News;
 import com.mini2.newsdisplayservice.domain.repository.NewsRepository;
+import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteNewsInfoDto;
+import com.mini2.newsdisplayservice.event.consumer.message.favorite.service.FavoriteNewsInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -52,9 +54,9 @@ public class NewsService {
     private static final double MAX_CATEGORY_TOTAL_SCORE = 50.0;
     private final NewsRepository newsRepository;
     private final OpenAiChatModel openAiChatModel;
-//    private final FavoriteRepository favoriteRepository;
-//    private final UserInterestRepository userInterestRepository;
+
     private final ObjectMapper objectMapper;
+    private final FavoriteNewsInfoService favoriteNewsInfoService;
     @Value("${naver.client.id}")
     private String CLIENT_ID;
     @Value("${naver.search.key}")
@@ -120,64 +122,25 @@ public class NewsService {
     public String getKeyword(Long userId) {
         // TODO 바꿀 것
         List<String> interests = Arrays.asList("게임", "스텔라 블레이드", "김형태");
-        List<String> favorites = Arrays.asList("IT/과학", "세계");
-
-//        List<News> newsList = newsRepository.findAll();
 
         String interestStr = String.join(", ", interests);
-        // "게임, 스텔라 블레이드, 김형태"
-        String favoriteStr = String.join(", ", favorites);
+
+//        List<News> newsList = newsRepository.findAll();
         String titles = "null";
 //                newsList.stream()
 //                .map(news -> news.getTitle() + " (" + news.getCategory() + ")")
 //                .collect(Collectors.joining("\n- ", "- ", ""));
 
         // TODO 최근에 좋아요 누른거 10개 중에서 가장 빈도높은 카테고리 보내기
-        /** TODO 각 카테고리에 대해:
-         //선호 점수 = 관심사 포함 여부 (2점) + 좋아요 뉴스 수 (1점/개수)
-         //최종 점수 = (좋아요 점수 * 가중치1) + (관심사 매칭 점수 * 가중치2)
-         //예:
-         //정치: 관심사 포함(2점) + 좋아요 3건(3점) → 총 5점
-         //IT: 관심사 미포함(0점) + 좋아요 2건(2점) → 총 2점
-         **/
-        // 예시 데이터 (다양한 시간대의 좋아요 이벤트)
-        List<LikeEvent> likeEvents = List.of(
-                // IT/과학 카테고리: 매우 최근 3개 + 중간 1개 => 높은 점수 예상
-                new LikeEvent("IT/과학", LocalDateTime.now().minusMinutes(5)),   // 5분 전 (거의 10점 기여)
-                new LikeEvent("IT/과학", LocalDateTime.now().minusMinutes(10)),  // 10분 전 (거의 10점 기여)
-                new LikeEvent("IT/과학", LocalDateTime.now().minusMinutes(15)),  // 15분 전 (거의 10점 기여)
-                new LikeEvent("IT/과학", LocalDateTime.now().minusDays(10)),     // 10일 전 (점수 기여 낮아짐)
-                new LikeEvent("IT/과학", LocalDateTime.now().minusDays(20)),     // 20일 전 (점수 기여 더 낮아짐)
-                new LikeEvent("IT/과학", LocalDateTime.now().minusDays(30)),     // 30일 전 (점수 기여 더 낮아짐)
-
-                // 경제 카테고리: 비교적 최근 2개 => 중간 점수 예상
-                new LikeEvent("경제", LocalDateTime.now().minusDays(2)),        // 2일 전
-                new LikeEvent("경제", LocalDateTime.now().minusDays(5)),        // 5일 전
-
-                // 사회 카테고리: 1개만 있고 오래됨 => 낮은 점수 예상
-                new LikeEvent("사회", LocalDateTime.now().minusDays(60)),        // 60일 전
-
-                // 정치 카테고리: 매우 많고 아주 최근에 몰림 => 50점 상한 도달 예상
-                new LikeEvent("정치", LocalDateTime.now().minusHours(1)),
-                new LikeEvent("정치", LocalDateTime.now().minusHours(2)),
-                new LikeEvent("정치", LocalDateTime.now().minusHours(3)),
-                new LikeEvent("정치", LocalDateTime.now().minusHours(4))
-        );
-
-
-        Map<String, Double> finalScores = calculateCategoryScores(likeEvents);
-        System.out.println("--- 카테고리별 최종 점수 (시간 가중치 및 최대 점수 제한 적용) ---");
-        finalScores.entrySet().stream()
-                .sorted(Map.Entry.<String, Double>comparingByValue().reversed()) // 점수가 높은 순으로 정렬
-                .forEach(entry -> System.out.printf("%s: %.2f점%n", entry.getKey(), entry.getValue()));
+        String favoriteStr = getTopTwoCategoryInterestsForGPT(userId);
 
         return openAiChatModel.call(
                 """
-                        사용자의 관심사는 다음과 같습니다:
+                        1. 사용자의 관심사는 다음과 같습니다:
                         %s
-                        사용자가 좋아하는 뉴스의 카테고리는 다음과 같습니다 :
+                        2. 사용자가 좋아하는 뉴스 카테고리의 점수는 다음과 같습니다(100점 만점) :
                         %s
-                        오늘의 뉴스 헤드라인과 카테고리는 다음과 같습니다:
+                        3. 오늘의 뉴스 헤드라인과 카테고리는 다음과 같습니다:
                         %s
                         
                         
@@ -189,11 +152,75 @@ public class NewsService {
                         - 검색어는 사용자의 관심사와 오늘 뉴스 헤드라인에 언급된 키워드를 기반으로 도출해주세요.
                         - 사용자의 관심사와 관련된 키워드는 높은 우선순위를 갖습니다.
                         - 뉴스 헤드라인에서 의미 있는 키워드를 충분히 도출할 수 없을 경우, 사용자 관심사 기반으로 **최신 트렌드를 반영한 키워드**를 생성해주세요.
-                        - 
+                        - 2번 항목에서 아무 것도 없다면 2번항목을 무시합니다. 그리고 2번 항목이 입력되어 있는데 언급되지 않은 카테고리는 관심이 없는 것입니다.
                         - 추천된 검색어는 공백으로 구분된 5개의 단어로만 출력해주세요 (쉼표 없이).
                         """.formatted(interestStr, favoriteStr, titles)
 
         );
+    }
+
+    public String getTopTwoCategoryInterestsForGPT(Long userId) {
+        List<FavoriteNewsInfoDto> favorites = favoriteNewsInfoService.getTop10Favoriets(userId);
+
+        /** TODO 각 카테고리에 대해:
+         //선호 점수 = 관심사 포함 여부 (2점) + 좋아요 뉴스 수 (1점/개수)
+         //최종 점수 = (좋아요 점수 * 가중치1) + (관심사 매칭 점수 * 가중치2)
+         //예:
+         //정치: 관심사 포함(2점) + 좋아요 3건(3점) → 총 5점
+         //IT: 관심사 미포함(0점) + 좋아요 2건(2점) → 총 2점
+         **/
+        // 2. FavoriteNewsInfoDto 리스트를 LikeEvent 리스트로 변환
+        List<LikeEvent> likeEvents = favorites.stream()
+                .map(dto -> {
+                    try {
+                        LocalDateTime timestamp = dto.getCreatedTime();
+                        return new LikeEvent(dto.getNewsId(), timestamp);
+                    } catch (Exception e) {
+                        log.error("FavoriteNewsInfoDto에서 LikeEvent 변환 중 오류 발생: {}", dto, e);
+                        return null; // 변환 실패 시 null 반환 (아래에서 필터링)
+                    }
+                })
+                .filter(event -> event != null) // 변환에 실패한 null 이벤트 필터링
+                .collect(Collectors.toList());
+
+        // 3. 변환된 LikeEvent 리스트로 실제 점수 계산 로직 호출
+        Map<String, Double> finalScores = calculateCategoryScores(likeEvents);
+        System.out.println("--- 카테고리별 최종 점수 (시간 가중치 및 최대 점수 제한 적용) ---");
+        finalScores.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed()) // 점수가 높은 순으로 정렬
+                .forEach(entry -> System.out.printf("%s: %.2f점%n", entry.getKey(), entry.getValue()));
+
+        List<Map.Entry<String, Double>> sortedCategories = finalScores.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed()) // 점수 높은 순 정렬
+                .limit(2) // 상위 2개만 선택
+                .toList();
+
+        // 상위 두 카테고리가 없는 경우 (예: 데이터 부족)
+        if (sortedCategories.size() < 2) {
+            // 상위 1개만 있을 경우 해당 카테고리만 두 배 점수로 반환
+            if (sortedCategories.size() == 1) {
+                Map.Entry<String, Double> top1 = sortedCategories.get(0);
+                double doubledScore = top1.getValue() * 2;
+                log.warn("사용자 {}의 카테고리 데이터가 부족하여 한 개의 관심 카테고리만 두 배 점수로 반환합니다: {}. 점수: {}", userId, top1.getKey(), doubledScore);
+                return String.format("%s %.2f점", top1.getKey(), doubledScore);
+            }
+            log.warn("사용자 {}의 관심 카테고리 데이터가 충분하지 않아 상위 2개를 찾을 수 없습니다.", userId);
+            return ""; // 상위 2개 카테고리를 찾을 수 없는 경우 빈 문자열 반환
+        }
+
+        // 정렬할 용도
+        // 3. 선택된 두 카테고리의 점수를 두 배로 곱함
+        Map.Entry<String, Double> top1 = sortedCategories.get(0);
+        Map.Entry<String, Double> top2 = sortedCategories.get(1);
+
+        double doubledScore1 = top1.getValue() * 2;
+        double doubledScore2 = top2.getValue() * 2;
+        String result = String.format("%s %.2f점, %s %.2f점",
+                top1.getKey(), doubledScore1,
+                top2.getKey(), doubledScore2);
+
+        return result;
+
     }
 
 
@@ -422,18 +449,7 @@ public class NewsService {
         return null;
     }
 
-    // TODO 유저가 좋아하는 목록을 받아온다. 카프카로
-    @Transactional
-    public Map<String, LocalDateTime> getUserFavorite2(Long userId) {
-        Map<String, LocalDateTime> favorites = new HashMap<>();
-        favorites.put("정치", LocalDateTime.now().minusHours(2)); // 현재 시간 2시간 전
-        favorites.put("경제", LocalDateTime.now().minusDays(1));  // 현재 시간 1일 전
-        favorites.put("IT/과학", LocalDateTime.now().minusMinutes(30)); // 현재 시간 30분 전
-        favorites.put("사회", LocalDateTime.now().minusDays(5));   // 현재 시간 5일 전
-        favorites.put("세계", LocalDateTime.now().minusWeeks(1));
 
-        return favorites;
-    }
 
     public String dateParser(String input) {
         DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z", Locale.ENGLISH);
