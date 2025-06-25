@@ -41,6 +41,7 @@ public class FavoriteNewsInfoService {
                     try {
                         // JSON 문자열을 FavoriteNewsInfoDto 객체로 변환
                         FavoriteNewsInfoDto newsDto = objectMapper.readValue(newsJson, FavoriteNewsInfoDto.class);
+                        log.info("newsDto={}", newsDto);
                         top10News.add(newsDto); // 변환된 객체를 리스트에 추가
                         count++;
                     } catch (JsonProcessingException e) {
