@@ -91,6 +91,7 @@ public class NewsService {
         for (LikeEvent event : likeEvents) {
             String category = event.getCategory();
             LocalDateTime likedAt = event.getCreatedAt();
+            log.info("점수계산용 로그 : category={}",category);
 
             // 좋아요를 누른 시점과 현재 시점의 차이 계산 (밀리초 단위)
             long durationMillis = Duration.between(likedAt, now).toMillis();
@@ -183,11 +184,13 @@ public class NewsService {
                         return null; // 변환 실패 시 null 반환 (아래에서 필터링)
                     }
                 })
-                .filter(event -> event != null) // 변환에 실패한 null 이벤트 필터링
+                .filter(Objects::nonNull) // 변환에 실패한 null 이벤트 필터링
                 .collect(Collectors.toList());
 
+        log.info("likeEvents: {}",likeEvents);
         // 3. 변환된 LikeEvent 리스트로 실제 점수 계산 로직 호출
         Map<String, Double> finalScores = calculateCategoryScores(likeEvents);
+        log.info("finalScores: {}", finalScores);
         System.out.println("--- 카테고리별 최종 점수 (시간 가중치 및 최대 점수 제한 적용) ---");
         finalScores.entrySet().stream()
                 .sorted(Map.Entry.<String, Double>comparingByValue().reversed()) // 점수가 높은 순으로 정렬

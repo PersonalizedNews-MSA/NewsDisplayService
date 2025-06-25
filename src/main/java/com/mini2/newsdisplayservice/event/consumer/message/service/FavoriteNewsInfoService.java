@@ -22,9 +22,7 @@ public class FavoriteNewsInfoService {
     public List<FavoriteNewsInfoDto> getTop10Favoriets(Long userId) {
         String redisKey = "user:" + userId + ":favorites";
         log.info("탑10 생성 키 = {}",redisKey);
-        Set<String> favoriteNewsIds = stringRedisTemplate
-                .opsForSet()
-                .members(redisKey);
+        Set<String> favoriteNewsIds = stringRedisTemplate.opsForSet().members(redisKey);
         log.info("favoriteNewsIds={}", favoriteNewsIds);
         List<FavoriteNewsInfoDto> top10News = new ArrayList<>();
 
