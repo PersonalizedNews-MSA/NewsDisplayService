@@ -1,9 +1,8 @@
-package com.mini2.newsdisplayservice.event.consumer.message.favorite.service;
+package com.mini2.newsdisplayservice.event.consumer.message.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteNewsInfoDto;
-import lombok.Getter;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoriteNewsInfoDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -21,7 +20,7 @@ public class FavoriteNewsInfoService {
     private final ObjectMapper objectMapper;
 
     public List<FavoriteNewsInfoDto> getTop10Favoriets(Long userId) {
-        String redisKey = "user:" + userId + ":favorites";
+        String redisKey = "user:" + userId.toString() + ":favorites";
         System.out.println("탑10 생성 키 = " + redisKey);
         Set<String> favoriteNewsIds = stringRedisTemplate
                 .opsForSet()

@@ -2,9 +2,11 @@ package com.mini2.newsdisplayservice.event.consumer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteEventDto;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteNewsInfoDto;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoritePayloadDto;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoriteEventDto;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoriteNewsInfoDto;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoritePayloadDto;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.interest.InterestEventDto;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.interest.InterestPayloadDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -14,6 +16,7 @@ import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -24,11 +27,11 @@ public class KafkaMessageConsumer {
 
     @KafkaListener(topics = FavoriteEventDto.Topic, properties = {
             JsonDeserializer.VALUE_DEFAULT_TYPE +
-                    ":com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteEventDto"
+                    ":com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoriteEventDto"
     })
     void handleFavoriteInfoEvent(FavoriteEventDto event, Acknowledgment ack) {
 
-        if(event==null || event.getPayload()==null) {
+        if (event == null || event.getPayload() == null) {
             log.warn("수신된 FavoriteInfoEvent가 null이거나 payload가 없습니다. 메시지: {}", event);
             ack.acknowledge(); // 유효하지 않은 메시지라도 일단 처리 완료로 간주
             return;
@@ -77,6 +80,49 @@ public class KafkaMessageConsumer {
         } else {
             log.warn("알 수 없는 북마크 이벤트 타입: {}. Payload: {}", eventType, payload);
         }
+
+        ack.acknowledge();
+    }
+
+    //    interest 받기
+    @KafkaListener(topics = InterestEventDto.Topic, properties = {
+            JsonDeserializer.VALUE_DEFAULT_TYPE +
+                    ":com.mini2.newsdisplayservice.event.consumer.message.dto.interest.InterestEventDto" // 새 DTO 타입 지정
+    })
+    void handleAnotherEvent(InterestEventDto event, Acknowledgment ack) {
+        log.info("새로운 InterestEventDto 토픽 메시지 수신: {}", event);
+
+        if (event == null || event.getPayload() == null) {
+            log.warn("수신된 InterestEventDto null이거나 payload가 없습니다. 메시지: {}", event);
+            ack.acknowledge();
+            return;
+        }
+
+        InterestPayloadDto payload = event.getPayload(); // 새로운 페이로드 타입
+
+        List<String> interestList = payload.getName();
+        String userId = payload.getUserId();
+
+        log.info("InterestEventDto 처리. userId={}, 리스트={}", userId, interestList);
+
+        // Redis에 가장 최근 목록만 저장 (String 타입, JSON 직렬화)
+        // 키는 user:[userId]:latest_interests 와 같이 명확하게 지정
+        String userLatestInterestsRedisKey = "user:" + userId + ":latest_interests";
+
+        try {
+            if (interestList != null && !interestList.isEmpty()) {
+                String jsonList = objectMapper.writeValueAsString(interestList);
+                // Redis SET 명령어를 사용하여 이전 값을 덮어쓰고 최신 값으로 업데이트
+                stringRedisTemplate.opsForValue().set(userLatestInterestsRedisKey, jsonList);
+                log.info("Redis에 사용자 {}의 가장 최근 관심사 목록 JSON이 저장됨: Key={}, JSON={}", userId, userLatestInterestsRedisKey, jsonList);
+            } else {
+                stringRedisTemplate.delete(userLatestInterestsRedisKey);
+                log.info("사용자 {}의 최신 관심사 목록이 비어 있으므로 Redis에서 해당 키를 삭제했습니다.", userId);
+            }
+        } catch (JsonProcessingException e) {
+            log.error("관심사 목록 JSON 직렬화 오류: userId={}, 오류={}", userId, e.getMessage(), e);
+        }
+
 
         ack.acknowledge();
     }

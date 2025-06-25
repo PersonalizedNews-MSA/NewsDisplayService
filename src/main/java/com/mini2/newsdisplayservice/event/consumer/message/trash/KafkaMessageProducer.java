@@ -1,7 +1,7 @@
-package com.mini2.newsdisplayservice.event.consumer.message.favorite.trash;
+package com.mini2.newsdisplayservice.event.consumer.message.trash;
 
 
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteEventDto;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoriteEventDto;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 

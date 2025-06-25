@@ -1,9 +1,11 @@
-package com.mini2.newsdisplayservice.event.consumer.message.favorite.trash;
+package com.mini2.newsdisplayservice.event.consumer.message.trash;
 
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteEventDto;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoriteNewsInfoDto;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.dto.FavoritePayloadDto;
-import com.mini2.newsdisplayservice.event.consumer.message.favorite.service.FavoriteNewsInfoService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoriteEventDto;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoriteNewsInfoDto;
+import com.mini2.newsdisplayservice.event.consumer.message.dto.favorite.FavoritePayloadDto;
+import com.mini2.newsdisplayservice.event.consumer.message.service.FavoriteNewsInfoService;
+import com.mini2.newsdisplayservice.event.consumer.message.service.UserInterestService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -23,6 +25,24 @@ public class trashController {
     // 이전에 만든 KafkaMessageProducer를 주입받음
     private final KafkaMessageProducer kafkaMessageProducer;
     private final FavoriteNewsInfoService favoriteNewsInfoService;
+    private final UserInterestService userInterestService;
+
+    @GetMapping("/interests")
+    public ResponseEntity<List<String>> getUserInterestsByPathVariable(
+            @RequestParam Long userId
+    ) {
+        log.info("사용자 ID({})의 관심사 목록 조회 요청 (PathVariable)", userId);
+        List<String> interests = userInterestService.getUserLatestInterests(userId);
+
+        if (interests.isEmpty()) {
+            log.info("사용자 ID({})의 관심사 목록을 찾을 수 없습니다.", userId);
+            // 200 OK와 함께 빈 리스트 반환 (데이터가 없음을 나타냄)
+            return new ResponseEntity<>(interests, HttpStatus.OK);
+        }
+
+        log.info("사용자 ID({})의 관심사 목록 조회 성공. 목록 수: {}", userId, interests.size());
+        return new ResponseEntity<>(interests, HttpStatus.OK);
+    }
 
     @GetMapping("/consumor") // 기존 요청에 따라 이름은 유지, 하지만 역할에 맞게 변경 고려
     public ResponseEntity<List<FavoriteNewsInfoDto>> getBookmarksFromRedis(@RequestParam("userId") Long userId) {
