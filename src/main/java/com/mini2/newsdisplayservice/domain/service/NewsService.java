@@ -189,7 +189,6 @@ public class NewsService {
                 .filter(Objects::nonNull) // 변환에 실패한 null 이벤트 필터링
                 .collect(Collectors.toList());
 
-        log.info("likeEvents 카테고리: {}, 만든시간 {}",likeEvents.get(0).getCategory(), likeEvents.get(0).getCreatedAt());
         // 3. 변환된 LikeEvent 리스트로 실제 점수 계산 로직 호출
         Map<String, Double> finalScores = calculateCategoryScores(likeEvents);
         log.info("finalScores: {}", finalScores);
