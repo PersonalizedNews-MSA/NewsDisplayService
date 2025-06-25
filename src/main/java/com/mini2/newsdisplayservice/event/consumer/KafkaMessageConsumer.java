@@ -76,7 +76,12 @@ public class KafkaMessageConsumer {
 
         } else if ("좋아요 취소".equalsIgnoreCase(eventType)) {
             stringRedisTemplate.opsForSet().remove(userFavoritesRedisKey, newsId);
-            log.info("Redis에서 북마크(하트) 제거됨: Key={}, NewsId={}", userFavoritesRedisKey, newsId);
+            Boolean deleted = stringRedisTemplate.delete(newsDetailRedisKey);
+            if (Boolean.TRUE.equals(deleted)) {
+                log.info("Redis에서 좋아요뉴스 상세 정보 JSON 삭제됨: Key={}", newsDetailRedisKey);
+            } else {
+                log.warn("Redis에서 좋아요뉴스 상세 정보 JSON을 삭제하지 못했습니다 (키가 없었을 수 있음): Key={}", newsDetailRedisKey);
+            }
         } else {
             log.warn("알 수 없는 북마크 이벤트 타입: {}. Payload: {}", eventType, payload);
         }

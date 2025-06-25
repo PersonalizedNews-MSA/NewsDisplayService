@@ -20,12 +20,12 @@ public class FavoriteNewsInfoService {
     private final ObjectMapper objectMapper;
 
     public List<FavoriteNewsInfoDto> getTop10Favoriets(Long userId) {
-        String redisKey = "user:" + userId.toString() + ":favorites";
-        System.out.println("탑10 생성 키 = " + redisKey);
+        String redisKey = "user:" + userId + ":favorites";
+        log.info("탑10 생성 키 = {}",redisKey);
         Set<String> favoriteNewsIds = stringRedisTemplate
                 .opsForSet()
                 .members(redisKey);
-
+        log.info("favoriteNewsIds={}", favoriteNewsIds);
         List<FavoriteNewsInfoDto> top10News = new ArrayList<>();
 
         if (favoriteNewsIds != null && !favoriteNewsIds.isEmpty()) { // Set이 비어있지 않은 경우에만 처리
@@ -35,6 +35,7 @@ public class FavoriteNewsInfoService {
 
                 String newsKey = "news:" + newsId; // 뉴스 ID를 키로 사용하여 Redis에서 뉴스 정보 조회
                 String newsJson = stringRedisTemplate.opsForValue().get(newsKey); // Redis에서 JSON 형태의 뉴스 정보 가져옴
+                log.info("뉴스제이슨 : {}",newsJson);
 
                 if (newsJson != null) {
                     try {
@@ -53,19 +54,6 @@ public class FavoriteNewsInfoService {
         }
         log.info("사용자 {}의 북마크 뉴스 {}개 조회 (객체 형태)", userId, top10News.size());
         return top10News;
-    }
-
-    public void saveBookmark(Long userId, FavoriteNewsInfoDto newsDto) throws JsonProcessingException {
-        // user:{userId}:favorites Set에 newsId를 추가
-        String userFavoritesKey = "user:" + userId + ":favorites";
-        stringRedisTemplate.opsForSet().add(userFavoritesKey, newsDto.getNewsId());
-
-        // news:{newsId} String에 FavoriteNewsInfoDto 객체를 JSON으로 저장
-        String newsInfoKey = "news:" + newsDto.getNewsId();
-        String newsJson = objectMapper.writeValueAsString(newsDto);
-        stringRedisTemplate.opsForValue().set(newsInfoKey, newsJson);
-
-        log.info("사용자 {}의 북마크 저장 (객체): NewsId={}, NewsInfo={}", userId, newsDto.getNewsId(), newsJson);
     }
 
 
